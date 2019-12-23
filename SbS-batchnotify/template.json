@@ -1,0 +1,183 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Parameters": {
+    "EnvironmentValue": {
+      "AllowedValues": [
+        "dv",
+        "qa",
+        "sb",
+        "pd"
+      ],
+      "Default": "sb",
+      "Description": "What environment is this?",
+      "Type": "String"
+    },
+    "GroupPrefix": {
+      "Description": "Account prefix",
+      "Type": "String"
+    },
+    "LowercaseGroupPrefix": {
+      "Description": "Account prefix",
+      "Type": "String"
+    },
+    "AccountNumber": {
+      "Description": "AWS Account number",
+      "Type": "String"
+    },
+    "UppercaseProjectCode": {
+      "Type": "String"
+    },
+    "LowercaseProjectCode": {
+      "Type": "String"
+    },
+    "SnsArn": {
+      "Type": "String"
+    },
+    "SnsName": {
+      "Type": "String"
+    },
+    "RuleName": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "SbSSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": {
+          "Ref": "SnsName"
+        },
+        "TopicName": {
+          "Ref": "SnsName"
+        }
+      }
+    },
+    "SbsSNSTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "DependsOn": [
+        "SbSSNSTopic"
+      ],
+      "Properties": {
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "allowEvents",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "events.amazonaws.com"
+                ]
+              },
+              "Action": "sns:Publish",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:sns:",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      ":",
+                      {
+                        "Ref": "AccountNumber"
+                      },
+                      ":",
+                      {
+                        "Ref": "LowercaseGroupPrefix"
+                      },
+                      "-thes-sbs-batchstatus"
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "Topics": [
+          {
+            "Ref": "SnsArn"
+          }
+        ]
+      }
+    },
+    "CloudwatchEventResource": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Batch Event Rule",
+        "EventPattern": {
+          "source": [
+            "aws.batch"
+          ],
+          "detail": {
+            "jobQueue": [
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:batch:us-east-1:",
+                    {
+                      "Ref": "AccountNumber"
+                    },
+                    ":job-queue/",
+                    {
+                      "Ref": "LowercaseGroupPrefix"
+                    },
+                    "-thes-sbs-recal"
+                  ]
+                ]
+              },
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:batch:us-east-1:",
+                    {
+                      "Ref": "AccountNumber"
+                    },
+                    ":job-queue/",
+                    {
+                      "Ref": "LowercaseGroupPrefix"
+                    },
+                    "-thes-sbsquick"
+                  ]
+                ]
+              },
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:batch:us-east-1:",
+                    {
+                      "Ref": "AccountNumber"
+                    },
+                    ":job-queue/",
+                    {
+                      "Ref": "LowercaseGroupPrefix"
+                    },
+                    "-thes-sbsmain"
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        "Name": {
+          "Ref": "RuleName"
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "SnsArn"
+            },
+            "Id": {
+              "Ref": "SnsName"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

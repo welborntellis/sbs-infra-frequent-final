@@ -1,0 +1,486 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "ECS Cluster for on-demand batch processing",
+    "Parameters": {
+        "clusterName": {
+            "Description": "Name of the cluster we are creating",
+            "Type": "String"
+        },
+        "ecsAMI": {
+            "Description": "AMI for the instance",
+            "Type": "String"
+        },
+        "ecsInstanceProfile": {
+            "Description": "IAM profile for the instance",
+            "Type": "String"
+        },
+        "ec2Key": {
+            "Description": "Key for the ECS host",
+            "Type": "String"
+        },
+        "instanceType": {
+            "Description": "Instance type for the ECS host",
+            "Type": "String"
+        },
+        "machineName": {
+            "Description": "Name for the ECS host",
+            "Type": "String"
+        },
+        "imageName": {
+            "Description": "URI for the task image",
+            "Type": "String"
+        },
+        "receiveCommand": {
+            "Description": "Set the command key for the container.",
+            "Type": "String"
+        },
+        "visibilityTimeout": {
+            "Description": "Set the command key for the container.",
+            "Type": "String"
+        },
+        "queueName": {
+            "Description": "Set the command key for the container.",
+            "Type": "String"
+        },
+        "snsPipelineParserTopic": {
+            "Description": "The SNS Topic to publish to once the command has completed to trigger the pipeline parser of the results.",
+            "Type": "String"
+        },
+        "desiredCapacity": {
+            "Description": "Number of instances to launch into ECS cluster.",
+            "Type": "Number"
+        },
+        "maxSize": {
+            "Description": "Maximum number of instances to launch into ECS cluster.",
+            "Type": "Number"
+        },
+        "environmentKey": {
+            "Description": "The short lower-case identifier for the environment",
+            "Type": "String"
+        }
+    },
+    "Outputs": {
+        "ClusterArn": {
+            "Value": {
+                "Fn::GetAtt": "ECSCluster.Arn"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${environmentKey}-thes-sbs-ecs-batch-cluster-arn"
+                }
+            }
+        },
+        "ServiceName": {
+            "Value": {
+                "Fn::GetAtt": "sbsService.Name"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${environmentKey}-thes-sbs-ecs-batch-service-name"
+                }
+            }
+        }
+    },
+    "Resources": {
+        "sbsBatchQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "VisibilityTimeout": {
+                    "Ref": "visibilityTimeout"
+                },
+                "QueueName": {
+                    "Ref": "queueName"
+                }
+            }
+        },
+        "sbsBatchQueuePolicy": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Properties": {
+                "Queues": [{
+                    "Ref": "sbsBatchQueue"
+                }],
+                "PolicyDocument": {
+                    "Statement": [{
+                        "Sid": "Users",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": {
+                                "Fn::Join": [
+                                    "", [
+                                        "arn:aws:iam::",
+                                        {
+                                            "Ref": "AWS::AccountId"
+                                        },
+                                        ":role/",
+                                        {
+                                            "Ref": "ecsInstanceProfile"
+                                        }
+                                    ]
+                                ]
+                            }
+                        },
+                        "Action": [
+                            "sqs:DeleteMessage",
+                            "sqs:ReceiveMessage"
+                        ],
+                        "Resource": [{
+                            "Ref": "sbsBatchQueue"
+                        }]
+                    }]
+                }
+            }
+        },
+        "ECSCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Properties": {
+                "ClusterName": {
+                    "Ref": "clusterName"
+                }
+            }
+        },
+        "ecsSecuityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow ECS connections",
+                "GroupName": {
+                    "Fn::Join": ["-", ["ecs-host", {
+                        "Ref": "AWS::StackName"
+                    }]]
+                },
+                "VpcId": {
+                    "Fn::ImportValue": "ProdVPCV1"
+                },
+                "SecurityGroupIngress": [{
+                    "IpProtocol": "tcp",
+                    "FromPort": "22",
+                    "ToPort": "22",
+                    "CidrIp": "10.42.0.0/16"
+                }],
+                "SecurityGroupEgress": [{
+                    "IpProtocol": "-1",
+                    "FromPort": "-1",
+                    "ToPort": "-1",
+                    "CidrIp": "0.0.0.0/0"
+                }]
+            }
+        },
+        "cloudwatchLogsGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Join": ["-", ["ECSLogGroup", {
+                        "Ref": "AWS::StackName"
+                    }]]
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "taskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "TaskRoleArn": {
+                    "Ref": "ecsInstanceProfile"
+                },
+                "ContainerDefinitions": [{
+                    "Command": ["receive_message.py"],
+                    "Cpu": "1024",
+                    "Essential": "true",
+                    "Image": {
+                        "Ref": "imageName"
+                    },
+                    "Environment": [{
+                            "Name": "RECEIVE_COMMAND",
+                            "Value": {
+                                "Ref": "receiveCommand"
+                            }
+                        },
+                        {
+                            "Name": "RECEIVE_QUEUE_URL",
+                            "Value": {
+                                "Ref": "sbsBatchQueue"
+                            }
+                        },
+                        {
+                            "Name": "SNS_PARSER_TOPIC",
+                            "Value": {
+                                "Ref": "snsPipelineParserTopic"
+                            }
+                        }
+                    ],
+                    "LogConfiguration": {
+                        "LogDriver": "awslogs",
+                        "Options": {
+                            "awslogs-group": {
+                                "Ref": "cloudwatchLogsGroup"
+                            },
+                            "awslogs-region": {
+                                "Ref": "AWS::Region"
+                            },
+                            "awslogs-stream-prefix": "ecs-sbs-app"
+                        }
+                    },
+                    "Memory": "2048",
+                    "Name": "ecs-sbs-app"
+                }],
+                "Family": {
+                    "Fn::Join": [
+                        "", [{
+                                "Ref": "AWS::StackName"
+                            },
+                            "-ecs-sbs-app"
+                        ]
+                    ]
+                }
+            }
+        },
+        "sbsService": {
+            "Type": "AWS::ECS::Service",
+            "Properties": {
+                "TaskDefinition": {
+                    "Ref": "taskDefinition"
+                },
+                "Cluster": {
+                    "Ref": "ECSCluster"
+                },
+                "DesiredCount": "1",
+                "DeploymentConfiguration": {
+                    "MinimumHealthyPercent": 0
+                },
+                "LoadBalancers": []
+            }
+        },
+        "sbsLaunchConfig": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "Properties": {
+                "IamInstanceProfile": {
+                    "Ref": "ecsInstanceProfile"
+                },
+                "ImageId": {
+                    "Ref": "ecsAMI"
+                },
+                "KeyName": {
+                    "Ref": "ec2Key"
+                },
+                "InstanceType": {
+                    "Ref": "instanceType"
+                },
+                "SecurityGroups": [{
+                    "Ref": "ecsSecuityGroup"
+                }],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "", [
+                                "#!/bin/bash -xe\n",
+                                "echo ECS_CLUSTER=", {
+                                    "Ref": "ECSCluster"
+                                }, " >> /etc/ecs/ecs.config", "\n",
+                                "yum update -y", "\n",
+                                "yum install -y aws-cfn-bootstrap", "\n",
+                                "yum install -y awslogs", "\n",
+                                "chkconfig awslogs on", "\n",
+                                "/opt/aws/bin/cfn-signal -e $? ",
+                                "         --stack ", {
+                                    "Ref": "AWS::StackName"
+                                },
+                                "         --resource sbsAutoScalingGroup ",
+                                "         --region ", {
+                                    "Ref": "AWS::Region"
+                                }, "\n"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "sbsAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Timeout": "PT15M"
+                }
+            },
+            "Properties": {
+                "LaunchConfigurationName": {
+                    "Ref": "sbsLaunchConfig"
+                },
+                "DesiredCapacity": "1",
+                "MinSize": "1",
+                "MaxSize": {
+                    "Ref": "maxSize"
+                },
+                "VPCZoneIdentifier": [{
+                        "Fn::ImportValue": "PrivateSubnetOneV1"
+                    },
+                    {
+                        "Fn::ImportValue": "PrivateSubnetTwoV1"
+                    },
+                    {
+                        "Fn::ImportValue": "PrivateSubnetThreeV1"
+                    },
+                    {
+                        "Fn::ImportValue": "PrivateSubnetFourV1"
+                    },
+                    {
+                        "Fn::ImportValue": "PrivateSubnetFiveV1"
+                    },
+                    {
+                        "Fn::ImportValue": "PrivateSubnetSixV1"
+                    },
+                    {
+                        "Fn::ImportValue": "PrivateSubnetSevenV1"
+                    },
+                    {
+                        "Fn::ImportValue": "PrivateSubnetEightV1"
+                    }
+                ]
+            },
+            "UpdatePolicy": {
+                "AutoScalingReplacingUpdate": {
+                    "WillReplace": "true"
+                }
+            }
+        },
+        "sbsServiceScalingTarget": {
+            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+            "DependsOn": "sbsService",
+            "Properties": {
+                "MinCapacity": 1,
+                "MaxCapacity": {
+                    "Ref": "maxSize"
+                },
+                "ResourceId": {
+                    "Fn::Join": [
+                        "", [
+                            "service/",
+                            {
+                                "Ref": "ECSCluster"
+                            }, "/",
+                            {
+                                "Fn::GetAtt": ["sbsService", "Name"]
+                            }
+                        ]
+                    ]
+                },
+                "RoleARN": {
+                    "Fn::ImportValue": "autoscalingRoleArnV1"
+                },
+                "ScalableDimension": "ecs:service:DesiredCount",
+                "ServiceNamespace": "ecs"
+            }
+        },
+        "sbsServiceScaleUpPolicy": {
+            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": "AStepPolicy",
+                "PolicyType": "StepScaling",
+                "ScalingTargetId": {
+                    "Ref": "sbsServiceScalingTarget"
+                },
+                "StepScalingPolicyConfiguration": {
+                    "AdjustmentType": "ChangeInCapacity",
+                    "Cooldown": 60,
+                    "MetricAggregationType": "Average",
+                    "StepAdjustments": [{
+                            "MetricIntervalLowerBound": 0,
+                            "MetricIntervalUpperBound": 10,
+                            "ScalingAdjustment": 1
+                        },
+                        {
+                            "MetricIntervalLowerBound": 10,
+                            "MetricIntervalUpperBound": 20,
+                            "ScalingAdjustment": 2
+                        },
+                        {
+                            "MetricIntervalLowerBound": 20,
+                            "MetricIntervalUpperBound": 30,
+                            "ScalingAdjustment": 4
+                        },
+                        {
+                            "MetricIntervalLowerBound": 30,
+                            "MetricIntervalUpperBound": 40,
+                            "ScalingAdjustment": 5
+                        },
+                        {
+                            "MetricIntervalLowerBound": 40,
+                            "MetricIntervalUpperBound": 50,
+                            "ScalingAdjustment": 6
+                        },
+                        {
+                            "MetricIntervalLowerBound": 50,
+                            "MetricIntervalUpperBound": 60,
+                            "ScalingAdjustment": 7
+                        },
+                        {
+                            "MetricIntervalLowerBound": 60,
+                            "ScalingAdjustment": 8
+                        }
+                    ]
+                }
+            }
+        },
+        "sbsServiceScaleDownPolicy": {
+            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": "AStepScaledownPolicy",
+                "PolicyType": "StepScaling",
+                "ScalingTargetId": {
+                    "Ref": "sbsServiceScalingTarget"
+                },
+                "StepScalingPolicyConfiguration": {
+                    "AdjustmentType": "ChangeInCapacity",
+                    "Cooldown": 60,
+                    "MetricAggregationType": "Average",
+                    "StepAdjustments": [{
+                        "MetricIntervalUpperBound": 0,
+                        "ScalingAdjustment": -100
+                    }]
+                }
+            }
+        },
+        "queueLengthAlarmHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": "1",
+                "AlarmDescription": "Alarm if queue length is >= 1 for one minute",
+                "Period": "60",
+                "AlarmActions": [{
+                    "Ref": "sbsServiceScaleUpPolicy"
+                }],
+                "Namespace": "AWS/SQS",
+                "Dimensions": [{
+                    "Name": "QueueName",
+                    "Value": {
+                        "Ref": "sbsBatchQueue"
+                    }
+                }],
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "MetricName": "ApproximateNumberOfMessagesVisible"
+            }
+        },
+        "queueLengthAlarmEmpty": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "EvaluationPeriods": "1",
+                "Statistic": "Average",
+                "Threshold": "1",
+                "AlarmDescription": "Alarm if queue length is <1 for one minute",
+                "Period": "600",
+                "AlarmActions": [{
+                    "Ref": "sbsServiceScaleDownPolicy"
+                }],
+                "Namespace": "AWS/SQS",
+                "Dimensions": [{
+                    "Name": "QueueName",
+                    "Value": {
+                        "Ref": "sbsBatchQueue"
+                    }
+                }],
+                "ComparisonOperator": "LessThanThreshold",
+                "MetricName": "ApproximateNumberOfMessagesVisible"
+            }
+        }
+    }
+}

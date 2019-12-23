@@ -1,0 +1,74 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Parameters": {
+    "EnvironmentValue": {
+      "AllowedValues": [
+        "dv",
+        "qa",
+        "sb",
+        "pd"
+      ],
+      "Default": "sb",
+      "Description": "What environment is this?",
+      "Type": "String"
+    },
+    "ruleName": {
+      "Type": "String"
+    },
+    "lambdaARN": {
+      "Type": "String"
+    },
+    "lambdaId": {
+      "Type": "String"
+    },
+    "batchECSClusterARN": {
+      "Type": "CommaDelimitedList"
+    }
+  },
+  "Resources": {
+    "CloudwatchEventResource": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Event rule",
+        "EventPattern": {
+          "source": [
+            "aws.ecs"
+          ],
+          "detail-type": [
+            "ECS Task State Change"
+          ],
+          "detail": {
+            "clusterArn": {
+              "Ref": "batchECSClusterARN"
+            }
+          }
+        },
+        "Name": {
+          "Ref": "ruleName"
+        },
+        "State": "ENABLED",
+        "Targets": [{
+          "Arn": {
+            "Ref": "lambdaARN"
+          },
+          "Id": {
+            "Ref": "lambdaId"
+          }
+        }]
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "lambdaARN"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["CloudwatchEventResource", "Arn"]
+        }
+      }
+    }
+  }
+}

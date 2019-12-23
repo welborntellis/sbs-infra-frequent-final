@@ -1,0 +1,144 @@
+{
+  "useast1": {
+    "lambda_handler": "sbs_batch_notify_lambda.send_to_sns",
+    "aws_region": "us-east-1",
+    "runtime": "python3.6",
+    "apigateway_enabled": false,
+    "lambda_description": "SbS Batch Notify Lambda",
+    "keep_warm": false,
+    "manage_roles": false,
+    "timeout_seconds": 60,
+    "memory_size": 128,
+    "cloudwatch_log_level": "INFO",
+    "exclude": [
+      "*.gz",
+      "*.rar",
+      ".tox",
+      ".pyc",
+      ".cache",
+      "build",
+      "htmlcov",
+      "alembic",
+      "tests",
+      "env",
+      "egg-info",
+      "deploy.sh"
+    ]
+  },
+  "sb": {
+    "extends": "useast1",
+    "project_name": "sb-thes-sbs-batch-notify",
+    "s3_bucket": "sb-thes-sbsdata",
+    "role_name": "SB-THES-SbS-Profile",
+    "vpc_config": {
+      "SubnetIds": [
+        "subnet-f6aff092",
+        "subnet-39b5ea5d",
+        "subnet-4faff02b",
+        "subnet-349bff1b",
+        "subnet-bc9ffb93",
+        "subnet-19e68236",
+        "subnet-26537e6d",
+        "subnet-b75578fc",
+        "subnet-765c713d"
+      ],
+      "SecurityGroupIds": [
+        "sg-41692337"
+      ]
+    },
+    "aws_environment_variables": {
+      "sbs_pipeline_batch_sns_topic_arn": "arn:aws:sns:us-east-1:947682355454:sb-thes-sbs-pipeline-notification",
+      "sbs_pipeline_parser_sns_topic_arn": "arn:aws:sns:us-east-1:947682355454:sb-thes-sbs-pipeline-parser-topic",
+      "sender_email": "no-reply@sbs.sb.research.phibred.com",
+      "destination_email": "DL-RES-DSI-TheseusSupport@pioneer.com",
+      "sbs_batch_log_group": "/aws/batch/job"
+    }
+  },
+  "dv": {
+    "extends": "useast1",
+    "project_name": "dv-thes-sbs-batch-notify",
+    "s3_bucket": "dv-thes-sbsdata",
+    "role_name": "DV-THES-SbS-Profile",
+    "vpc_config": {
+      "SubnetIds": [
+        "subnet-1bb4eb7f",
+        "subnet-81b9e6e5",
+        "subnet-9fb1eefb",
+        "subnet-6ee38741",
+        "subnet-e898fcc7",
+        "subnet-97ee8ab8",
+        "subnet-28280563",
+        "subnet-b15e73fa",
+        "subnet-b95875f2"
+      ],
+      "SecurityGroupIds": [
+        "sg-a69765d0"
+      ]
+    },
+    "aws_environment_variables": {
+      "sbs_pipeline_batch_sns_topic_arn": "arn:aws:sns:us-east-1:820225517789:dv-thes-sbs-pipeline-notification",
+      "sbs_pipeline_parser_sns_topic_arn": "arn:aws:sns:us-east-1:820225517789:dv-thes-sbs-pipeline-parser-topic",
+      "sender_email": "no-reply@sbs.dv.research.phibred.com",
+      "destination_email": "DL-RES-DSI-TheseusSupport@pioneer.com",
+      "sbs_batch_log_group": "/aws/batch/job"
+    }
+  },
+  "qa": {
+    "extends": "useast1",
+    "project_name": "qa-thes-sbs-batch-notify",
+    "s3_bucket": "qa-thes-sbsdata",
+    "role_name": "QA-THES-SbS-Profile",
+    "vpc_config": {
+      "SubnetIds": [
+        "subnet-1bb4eb7f",
+        "subnet-81b9e6e5",
+        "subnet-9fb1eefb",
+        "subnet-6ee38741",
+        "subnet-e898fcc7",
+        "subnet-97ee8ab8",
+        "subnet-28280563",
+        "subnet-b15e73fa",
+        "subnet-b95875f2"
+      ],
+      "SecurityGroupIds": [
+        "sg-a69765d0"
+      ]
+    },
+    "aws_environment_variables": {
+      "sbs_pipeline_batch_sns_topic_arn": "arn:aws:sns:us-east-1:820225517789:qa-thes-sbs-pipeline-notification",
+      "sbs_pipeline_parser_sns_topic_arn": "arn:aws:sns:us-east-1:820225517789:qa-thes-sbs-pipeline-parser-topic",
+      "sender_email": "no-reply@sbs.qa.research.phibred.com",
+      "destination_email": "DL-RES-DSI-TheseusSupport@pioneer.com",
+      "sbs_batch_log_group": "/aws/batch/job"
+    }
+  },
+  "pd": {
+    "extends": "useast1",
+    "project_name": "pd-thes-sbs-batch-notify",
+    "s3_bucket": "pd-thes-sbsdata",
+    "role_name": "PD-THES-SbS-Profile",
+    "vpc_config": {
+      "SubnetIds": [
+        "subnet-5e781c71",
+        "subnet-d87c18f7",
+        "subnet-fb7713d4",
+        "subnet-0ea98b45",
+        "subnet-06b0924d",
+        "subnet-4ca58707",
+        "subnet-65fe6638",
+        "subnet-01fa625c",
+        "subnet-71cb532c"
+      ],
+      "SecurityGroupIds": [
+        "sg-c53136b3"
+      ]
+    },
+    "aws_environment_variables": {
+      "sbs_pipeline_batch_sns_topic_arn": "arn:aws:sns:us-east-1:091853933339:pd-thes-sbs-pipeline-notification",
+      "sbs_pipeline_parser_sns_topic_arn": "arn:aws:sns:us-east-1:091853933339:pd-thes-sbs-pipeline-parser-topic",
+      "sender_email": "no-reply@sbs.pd.research.phibred.com",
+      "destination_email": "DL-RES-DSI-TheseusSupport@pioneer.com",
+      "sbs_batch_log_group": "/aws/batch/job"
+    }
+  }
+}
